@@ -8,11 +8,17 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Europe/Paris"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
+    open-pull-requests-limit: 10
+    target-branch: "main"
     commit-message:
-      prefix: "chore(deps)"
-      include: "scope"
-    auto-merge: true
+      prefix: "chore(deps):"
+      prefix-development: "chore(deps-dev):"
+      include-scope: "@dependabot"
+    groups:
+      npm-patch-and-minor:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "wrangler"
+        update-types: ["version-update:semver-major"]
