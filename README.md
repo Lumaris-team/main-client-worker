@@ -1,5 +1,6 @@
 <p align="center">
-  <img width="155" src="src/frontend/assets/other/cloudflare_worker.png" style="border-radius: 100px;" />
+  <img width="170" src="src/frontend/assets/other/cloudflare_worker.png" style="border-radius: 100px;" />
+  <p>  </p>
   <img width="155" src="src/frontend/assets/logo/logo.png" style="border-radius: 100px;" />
 </p>
 
