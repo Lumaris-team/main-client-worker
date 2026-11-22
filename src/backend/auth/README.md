@@ -46,7 +46,7 @@ This provides enhanced security by limiting the exposure of credentials.
 3. Token Exchange → Client sends token to /api/auth/exchange
 4. JWT Issuance → authentication-client-worker issues JWT
 5. API Calls → Client uses JWT for API requests
-6. JWT Renewal → Automatic renewal every 10 minutes
+6. JWT Renewal → Automatic renewal every 9 minutes
 ```
 
 ### Module Structure
@@ -165,7 +165,7 @@ export async function issueSessionToken(env, payload)
 
 - **One-time tokens**: Single-use, short-lived
 - **JWT tokens**: 30-minute expiration
-- **Renewal**: Automatic renewal every 10 minutes
+- **Renewal**: Automatic renewal every 9 minutes
 - **Signature verification**: HMAC-SHA256 signatures
 
 ---
@@ -175,7 +175,7 @@ export async function issueSessionToken(env, payload)
 ### One-Time Token
 
 - **Purpose**: Initial authentication
-- **Lifetime**: 10 minutes
+- **Lifetime**: 15 minutes
 - **Usage**: Single-use, exchanged for JWT
 - **Storage**: Cached in authentication-client-worker
 
@@ -184,7 +184,7 @@ export async function issueSessionToken(env, payload)
 - **Purpose**: API authentication
 - **Lifetime**: 30 minutes
 - **Usage**: Sent in Authorization header
-- **Renewal**: Every 10 minutes via one-time token
+- **Renewal**: Every 9 minutes via one-time token
 - **Storage**: Cached in authentication-client-worker
 
 ---
