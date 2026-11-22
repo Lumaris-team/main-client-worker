@@ -16,7 +16,7 @@ This directory contains the authentication and authorization services for the Lu
 
 ## 🎯 Overview
 
-The authentication service provides a comprehensive security layer for the Lumaris platform, using custom JWT tokens issued by login-client-worker and Cloudflare Turnstile for bot protection. The service handles:
+The authentication service provides a comprehensive security layer for the Lumaris platform, using custom JWT tokens issued by authentication-client-worker and Cloudflare Turnstile for bot protection. The service handles:
 
 - **User Authentication**: Login, logout, and session management
 - **Token Management**: JWT token generation and validation
@@ -29,7 +29,7 @@ The authentication service provides a comprehensive security layer for the Lumar
 The authentication system uses a custom JWT approach:
 
 1. **One-Time Token**: Short-lived token for initial authentication
-2. **JWT Token**: Long-lived token issued by login-client-worker
+2. **JWT Token**: Long-lived token issued by authentication-client-worker
 3. **Service Binding**: Secure communication between workers
 
 This provides enhanced security by limiting the exposure of credentials.
@@ -41,10 +41,10 @@ This provides enhanced security by limiting the exposure of credentials.
 ### Authentication Flow
 
 ```
-1. User Login → login-client-worker (with Turnstile)
+1. User Login → authentication-client-worker (with Turnstile)
 2. One-Time Token → Client receives token
 3. Token Exchange → Client sends token to /api/auth/exchange
-4. JWT Issuance → login-client-worker issues JWT
+4. JWT Issuance → authentication-client-worker issues JWT
 5. API Calls → Client uses JWT for API requests
 6. JWT Renewal → Automatic renewal every 10 minutes
 ```
@@ -177,7 +177,7 @@ export async function issueSessionToken(env, payload)
 - **Purpose**: Initial authentication
 - **Lifetime**: 10 minutes
 - **Usage**: Single-use, exchanged for JWT
-- **Storage**: Cached in login-client-worker
+- **Storage**: Cached in authentication-client-worker
 
 ### JWT Token
 
@@ -185,7 +185,7 @@ export async function issueSessionToken(env, payload)
 - **Lifetime**: 30 minutes
 - **Usage**: Sent in Authorization header
 - **Renewal**: Every 10 minutes via one-time token
-- **Storage**: Cached in login-client-worker
+- **Storage**: Cached in authentication-client-worker
 
 ---
 

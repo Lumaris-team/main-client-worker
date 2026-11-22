@@ -30,7 +30,6 @@ export async function StatsFunction(env) {
         capacityGB: 20,
         items: [
           { key: "files/", label: "lumaris/files/", bytes: 0 },
-          { key: "study-notes/", label: "lumaris/study-notes/", bytes: 0 },
         ]
       }
     };

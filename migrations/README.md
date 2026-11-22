@@ -167,7 +167,6 @@ wrangler d1 execute customization --command="SELECT name FROM sqlite_master WHER
 - `users`: User accounts and profiles
 - `pomodoro_sessions`: Pomodoro timer sessions
 - `websites`: Website blocking rules
-- `study_notes`: Study notes and content
 - `files`: File metadata and organization
 
 ### Schema Design Principles

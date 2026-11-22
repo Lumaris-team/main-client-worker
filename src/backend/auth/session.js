@@ -1,5 +1,5 @@
 // JWT token verification for main-client-worker
-// Verifies JWTs issued by login-client-worker
+// Verifies JWTs issued by authentication-client-worker
 
 export async function verifySessionToken(env, token) {
   if (!token || typeof token !== "string") {

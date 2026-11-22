@@ -20,8 +20,8 @@
   },
   "services": [
     {
-      "binding": "LOGIN_CLIENT_WORKER",
-      "service": "login-client-worker"
+      "binding": "AUTH_CLIENT_WORKER",
+      "service": "authentication-client-worker"
     }
   ],
   "d1_databases": [
