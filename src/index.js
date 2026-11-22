@@ -10,7 +10,6 @@ import { verifySessionToken } from "./backend/auth/session.js";
 import { Pomodoro } from "./backend/database/pomodoro.js";
 import { WebsitesFunction } from "./backend/database/websites.js";
 import { FilesFunction, initializeFolderArchitecture } from "./backend/database/files_management.js";
-import { StudyNotesFunction } from "./backend/database/study_notes.js";
 import { ToolsFunction } from "./backend/tools/index.js";
 import { StatsFunction } from "./backend/settings/stats.js";
 import { CustomizationFunction } from "./backend/settings/customization.js";
@@ -73,7 +72,7 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
     
-    // Auth: exchange one-time token for JWT via login-client-worker
+    // Auth: exchange one-time token for JWT via authentication-client-worker
     if (url.pathname === "/api/auth/exchange" && method === "POST") {
       try {
         const resp = await Auth(env, "exchange", method, body, request);
@@ -147,8 +146,6 @@ export default {
           resp = await ToolsFunction(env, url.pathname.slice("/api/tools/".length), method, body);
         } else if (url.pathname.startsWith("/api/files/")) {
           resp = await FilesFunction(env, url.pathname.slice("/api/files/".length), method, body);
-        } else if (url.pathname.startsWith("/api/study-notes/")) {
-          resp = await StudyNotesFunction(env, url.pathname.slice("/api/study-notes/".length), method, body);
         } else if (url.pathname === "/api/settings/stats" || url.pathname === "/api/settings/stats/") {
           resp = await StatsFunction(env);
         } else if (url.pathname === "/api/settings/customization" || url.pathname === "/api/settings/customization/") {

@@ -1,4 +1,4 @@
-// Auth API: exchanges one-time token for JWT via login-client-worker binding
+// Auth API: exchanges one-time token for JWT via authentication-client-worker binding
 
 export async function Auth(env, path, method, body, request) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
@@ -12,29 +12,29 @@ export async function Auth(env, path, method, body, request) {
       return { valid: false, reason: "missing_params" };
     }
 
-    // Call login-client-worker via service binding
-    const loginWorker = env.LOGIN_CLIENT_WORKER;
-    if (!loginWorker) {
-      console.error("LOGIN_CLIENT_WORKER binding not configured");
+    // Call authentication-client-worker via service binding
+    const authWorker = env.AUTH_CLIENT_WORKER;
+    if (!authWorker) {
+      console.error("AUTH_CLIENT_WORKER binding not configured");
       return { valid: false, reason: "binding_missing" };
     }
 
     try {
-      const response = await loginWorker.fetch("https://login-client-worker/api/renew-jwt", {
+      const response = await authWorker.fetch("https://authentication-client-worker/api/renew-jwt", {
         method: "POST",
         headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip },
         body: JSON.stringify({ username, oneTimeToken }),
       });
 
       if (!response.ok) {
-        return { valid: false, reason: "login_worker_error" };
+        return { valid: false, reason: "auth_worker_error" };
       }
 
       const data = await response.json();
       return { valid: true, jwt: data.jwt, oneTimeToken: data.oneTimeToken };
     } catch (e) {
-      console.error("LOGIN_WORKER_ERROR:", e);
-      return { valid: false, reason: "login_worker_error" };
+      console.error("AUTH_WORKER_ERROR:", e);
+      return { valid: false, reason: "auth_worker_error" };
     }
   }
 
@@ -45,7 +45,7 @@ export async function Auth(env, path, method, body, request) {
       return { valid: false, reason: "missing_jwt" };
     }
 
-    // Verify JWT locally using same secret as login-client-worker
+    // Verify JWT locally using same secret as authentication-client-worker
     try {
       const parts = jwt.split(".");
       if (parts.length !== 3) {

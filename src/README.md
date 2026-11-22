@@ -107,7 +107,6 @@ The backend follows a service-oriented architecture:
 - `home/`: Main dashboard and landing page
 - `settings/`: User settings and customization
 - `workspace/`: Workspace management interface
-- `study-notes/`: Study notes functionality
 - `tools/`: Productivity tools interface
 - `files/`: File management interface
 - `ai/`: AI chat interface
@@ -251,7 +250,7 @@ Backend services have these dependencies:
 
 ### Naming Conventions
 
-- **Files**: kebab-case for files (e.g., `study_notes.js`)
+- **Files**: kebab-case for files (e.g., `files_management.js`)
 - **Functions**: camelCase for functions (e.g., `getUserData`)
 - **Constants**: UPPER_SNAKE_CASE for constants (e.g., `API_BASE_URL`)
 - **Components**: PascalCase for components (if using framework)

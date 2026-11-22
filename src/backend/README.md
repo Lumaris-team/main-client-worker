@@ -62,7 +62,6 @@ backend/
 │   ├── pomodoro.js       # Pomodoro timer data
 │   ├── websites.js       # Website blocking rules
 │   ├── files_management.js # File management operations
-│   ├── study_notes.js    # Study notes storage
 │   ├── mega.js           # MEGA storage integration
 │   ├── storage_stats.js  # Storage statistics
 │   └── notes.js          # General note operations
@@ -211,7 +210,6 @@ try {
 - `GET/POST /api/pomodoro/*`: Pomodoro timer management
 - `GET/POST/DELETE /api/websites/*`: Website blocking rules
 - `GET/POST /api/files/*`: File management operations
-- `GET/POST /api/study-notes/*`: Study notes management
 
 **Dependencies**: D1 database, MEGA API
 

@@ -2,7 +2,6 @@ import { getClient, getFolderIfExists } from "./database/mega.js";
 
 const STORAGE_PATHS = [
   { key: "files/", label: "Files" },
-  { key: "study-notes/", label: "Study notes" },
 ];
 
 async function getFolderSize(env, path) {

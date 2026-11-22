@@ -56,7 +56,7 @@ Lumaris is a comprehensive educational platform that offers students:
 
 - **School Management**: Integration with ÉcoleDirecte for grades, homework, and timetable
 - **AI Assistant**: Intelligent tutoring and homework help using Cloudflare Workers AI
-- **Workspace**: File management, study notes, and organizational tools
+- **Workspace**: File management and organizational tools
 - **Notifications**: Real-time alerts for important academic events
 - **Customization**: Personalized dashboard with extensive configuration options
 

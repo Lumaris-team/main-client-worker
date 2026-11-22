@@ -182,42 +182,6 @@ export async function initializeFolderArchitecture(env, userId)
 }
 ```
 
-### Study Notes (`study_notes.js`)
-
-**Purpose**: Academic note management and organization
-
-**Key Function**:
-```javascript
-export async function StudyNotesFunction(env, subpath, method, body)
-```
-
-**Features**:
-- Rich text note creation
-- Subject organization
-- Search functionality
-- Export options
-- Collaboration features
-
-**API Endpoints**:
-- `GET /api/study-notes/*`: Get notes
-- `POST /api/study-notes`: Create note
-- `PUT /api/study-notes/:id`: Update note
-- `DELETE /api/study-notes/:id`: Delete note
-
-**Data Model**:
-```javascript
-{
-  id: Number,
-  user_id: String,
-  title: String,          // Note title
-  content: String,        // Note content (rich text)
-  subject: String,        // Subject
-  tags: Array,            // Tags array
-  created_at: String,     // Creation timestamp
-  updated_at: String,     // Update timestamp
-  is_favorite: Boolean    // Favorite status
-}
-```
 
 ### MEGA Integration (`mega.js`)
 
@@ -348,22 +312,6 @@ CREATE TABLE websites (
 );
 ```
 
-### Study Notes Table
-
-```sql
-CREATE TABLE study_notes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT,
-  subject TEXT,
-  tags TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  is_favorite BOOLEAN DEFAULT FALSE,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
-```
 
 ### Files Table
 
@@ -516,47 +464,6 @@ Upload file to cloud storage.
 }
 ```
 
-### Study Notes Endpoints
-
-#### GET `/api/study-notes`
-
-Get user's study notes.
-
-**Query Parameters**:
-- `subject`: Filter by subject
-- `search`: Search in title and content
-
-**Response**:
-```json
-{
-  "notes": [
-    {
-      "id": 1,
-      "title": "Mathematics Chapter 1",
-      "content": "Note content...",
-      "subject": "Mathematics",
-      "tags": ["algebra", "equations"],
-      "created_at": "2024-01-15T10:00:00Z"
-    }
-  ]
-}
-```
-
-#### POST `/api/study-notes`
-
-Create new study note.
-
-**Request Body**:
-```json
-{
-  "title": "Physics Notes",
-  "content": "Note content...",
-  "subject": "Physics",
-  "tags": ["mechanics", "forces"]
-}
-```
-
----
 
 ## ☁️ Cloud Storage Integration
 
