@@ -1,0 +1,190 @@
+// Tasks API — backed by the `timetable` D1 database.
+// Tables: tasks, trash_tasks, repeat_tasks (+ events variants).
+// Columns are detected via PRAGMA so schema drift doesn't break writes.
+
+const TABLES = {
+  tasks: "tasks",
+  trash: "trash_tasks",
+  repeat: "repeat_tasks",
+  events: "events",
+  trash_events: "trash_events",
+  repeat_events: "repeat_events",
+};
+
+// Where a deleted row goes, and where a restored row comes back to.
+const TRASH_TARGET = {
+  tasks: "trash_tasks",
+  repeat_tasks: "trash_tasks",
+  events: "trash_events",
+  repeat_events: "trash_events",
+};
+const RESTORE_TARGET = {
+  trash_tasks: "tasks",
+  trash_events: "events",
+};
+
+const columnCache = new Map();
+
+async function tableColumns(db, table) {
+  if (!columnCache.has(table)) {
+    try {
+      const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+      columnCache.set(table, new Set((results || []).map((r) => r.name)));
+    } catch {
+      columnCache.set(table, new Set());
+    }
+  }
+  return columnCache.get(table);
+}
+
+function resolveTable(name) {
+  const key = String(name || "tasks");
+  const table = TABLES[key] || (Object.values(TABLES).includes(key) ? key : null);
+  if (!table) throw new Error(`Unknown tasks table: ${name}`);
+  return table;
+}
+
+function pickFields(row, columns) {
+  const out = {};
+  for (const [k, v] of Object.entries(row || {})) {
+    if (columns.has(k) && v !== undefined) {
+      out[k] = (v !== null && typeof v === "object") ? JSON.stringify(v) : v;
+    }
+  }
+  return out;
+}
+
+async function nextId(db, table) {
+  const row = await db.prepare(`SELECT COALESCE(MAX(task_id), 0) + 1 AS id FROM ${table}`).first();
+  return Number(row?.id) || 1;
+}
+
+async function insertRow(db, table, fields) {
+  const cols = await tableColumns(db, table);
+  const clean = pickFields(fields, cols);
+  const keys = Object.keys(clean);
+  if (!keys.length) throw new Error("No writable fields provided");
+  const placeholders = keys.map(() => "?").join(", ");
+  const sql = `INSERT INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`;
+  await db.prepare(sql).bind(...keys.map((k) => clean[k])).run();
+  return clean.task_id ?? fields.task_id;
+}
+
+async function getRow(db, table, taskId) {
+  const cols = await tableColumns(db, table);
+  if (!cols.has("task_id")) throw new Error(`${table} has no task_id column`);
+  return db.prepare(`SELECT * FROM ${table} WHERE task_id = ?`).bind(Number(taskId)).first();
+}
+
+async function moveRow(db, fromTable, toTable, taskId, extraFields = {}) {
+  const row = await getRow(db, fromTable, taskId);
+  if (!row) throw new Error(`Task ${taskId} not found in ${fromTable}`);
+  const cols = await tableColumns(db, toTable);
+  const fields = pickFields({ ...row, ...extraFields }, cols);
+  const keys = Object.keys(fields);
+  const placeholders = keys.map(() => "?").join(", ");
+  await db.prepare(`INSERT INTO ${toTable} (${keys.join(", ")}) VALUES (${placeholders})`)
+    .bind(...keys.map((k) => fields[k])).run();
+  await db.prepare(`DELETE FROM ${fromTable} WHERE task_id = ?`).bind(Number(taskId)).run();
+  return fields;
+}
+
+export async function TasksFunction(env, subpath, method, body, session) {
+  const db = env.timetable;
+  if (!db) throw new Error("timetable D1 binding is not configured");
+  const action = String(subpath || "").replace(/^\/+|\/+$/g, "") || "list";
+
+  switch (action) {
+    case "list": {
+      const wanted = Array.isArray(body?.tables) && body.tables.length
+        ? body.tables.map(resolveTable)
+        : ["tasks", "trash_tasks", "repeat_tasks"];
+      const result = {};
+      for (const table of wanted) {
+        let sql = `SELECT * FROM ${table}`;
+        const clauses = [];
+        const binds = [];
+        if (body?.done !== undefined && body?.done !== null && table !== "trash_tasks") {
+          clauses.push("is_done = ?");
+          binds.push(body.done ? 1 : 0);
+        }
+        if (body?.q) {
+          clauses.push("(title LIKE ? OR text_body LIKE ?)");
+          binds.push(`%${body.q}%`, `%${body.q}%`);
+        }
+        if (clauses.length) sql += ` WHERE ${clauses.join(" AND ")}`;
+        sql += " ORDER BY is_done ASC, task_id DESC";
+        const { results } = await db.prepare(sql).bind(...binds).all();
+        result[table] = results || [];
+      }
+      return { tables: result };
+    }
+
+    case "create": {
+      const table = resolveTable(body?.table || "tasks");
+      if (!["tasks", "repeat_tasks", "events", "repeat_events"].includes(table)) {
+        throw new Error("Cannot create directly into a trash table");
+      }
+      const id = await nextId(db, table);
+      const fields = { ...(body?.fields || body || {}) };
+      delete fields.table;
+      fields.task_id = id;
+      if (fields.is_done === undefined) fields.is_done = 0;
+      await insertRow(db, table, fields);
+      const row = await getRow(db, table, id);
+      return { created: true, table, task: row };
+    }
+
+    case "update": {
+      const table = resolveTable(body?.table || "tasks");
+      const cols = await tableColumns(db, table);
+      const clean = pickFields(body?.fields || {}, cols);
+      delete clean.task_id;
+      const keys = Object.keys(clean);
+      if (!keys.length) throw new Error("No writable fields provided");
+      const sql = `UPDATE ${table} SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE task_id = ?`;
+      await db.prepare(sql).bind(...keys.map((k) => clean[k]), Number(body?.task_id)).run();
+      const row = await getRow(db, table, body?.task_id);
+      return { updated: true, table, task: row };
+    }
+
+    case "toggle": {
+      const table = resolveTable(body?.table || "tasks");
+      const row = await getRow(db, table, body?.task_id);
+      if (!row) throw new Error("Task not found");
+      const next = row.is_done ? 0 : 1;
+      await db.prepare(`UPDATE ${table} SET is_done = ? WHERE task_id = ?`)
+        .bind(next, Number(body.task_id)).run();
+      return { task_id: Number(body.task_id), table, is_done: next };
+    }
+
+    case "delete": {
+      const table = resolveTable(body?.table || "tasks");
+      const trash = TRASH_TARGET[table];
+      if (!trash) throw new Error(`Cannot trash ${table}`);
+      const moved = await moveRow(db, table, trash, body?.task_id);
+      return { deleted: true, from: table, to: trash, task: moved };
+    }
+
+    case "restore": {
+      const table = resolveTable(body?.table || "trash_tasks");
+      if (!RESTORE_TARGET[table]) throw new Error(`Cannot restore from ${table}`);
+      // A row carrying a frequency comes back as a repeat task.
+      const source = await getRow(db, table, body?.task_id);
+      const hasFreq = source && (source.frequency || (typeof source.excludes_periods === "string" && source.excludes_periods));
+      const target = hasFreq && table === "trash_tasks" ? "repeat_tasks" : RESTORE_TARGET[table];
+      const moved = await moveRow(db, table, target, body?.task_id);
+      return { restored: true, from: table, to: target, task: moved };
+    }
+
+    case "purge": {
+      const table = resolveTable(body?.table || "trash_tasks");
+      if (!table.startsWith("trash_")) throw new Error("Purge is only allowed on trash tables");
+      await db.prepare(`DELETE FROM ${table} WHERE task_id = ?`).bind(Number(body?.task_id)).run();
+      return { purged: true, table, task_id: Number(body?.task_id) };
+    }
+
+    default:
+      throw new Error(`Unknown tasks action: ${action}`);
+  }
+}

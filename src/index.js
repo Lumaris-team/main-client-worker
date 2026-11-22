@@ -10,6 +10,7 @@ import { verifySessionToken } from "./backend/auth/session.js";
 import { Pomodoro } from "./backend/database/pomodoro.js";
 import { WebsitesFunction } from "./backend/database/websites.js";
 import { FilesFunction, initializeFolderArchitecture } from "./backend/database/files_management.js";
+import { TasksFunction } from "./backend/database/tasks.js";
 import { ToolsFunction } from "./backend/tools/index.js";
 import { StatsFunction } from "./backend/settings/stats.js";
 import { CustomizationFunction } from "./backend/settings/customization.js";
@@ -150,6 +151,8 @@ export default {
           resp = await StatsFunction(env);
         } else if (url.pathname === "/api/settings/customization" || url.pathname === "/api/settings/customization/") {
           resp = await CustomizationFunction(env, url.pathname.slice("/api/settings/customization".length), method, body, session.payload);
+        } else if (url.pathname === "/api/tasks" || url.pathname === "/api/tasks/" || url.pathname.startsWith("/api/tasks/")) {
+          resp = await TasksFunction(env, url.pathname.slice("/api/tasks/".length), method, body, session.payload);
         };
         // Return response
         return new Response(JSON.stringify({
