@@ -23,6 +23,27 @@ const RESTORE_TARGET = {
   trash_events: "events",
 };
 
+// Lookup tables managed from /settings → Workspace.
+const LOOKUPS = {
+  labels: { table: "labels", idCol: "label_id" },
+  flags: { table: "flags", idCol: "flag_id" },
+  types: { table: "task_types", idCol: "type_id" },
+  methods: { table: "methods", idCol: "method_id" },
+  priorities: { table: "priorities", idCol: "priority_id" },
+  attention: { table: "attention_levels", idCol: "attention_level_id" },
+  folders: { table: "folders", idCol: "folder_id" },
+};
+
+// Defaults for NOT NULL columns when the client omits them.
+const CREATE_DEFAULTS = {
+  path: "/",
+  is_done: 0,
+  remind: 0,
+  is_homework: 0,
+  push_tasks: 0,
+  frequency: "custom",
+};
+
 const columnCache = new Map();
 
 async function tableColumns(db, table) {
@@ -54,8 +75,8 @@ function pickFields(row, columns) {
   return out;
 }
 
-async function nextId(db, table) {
-  const row = await db.prepare(`SELECT COALESCE(MAX(task_id), 0) + 1 AS id FROM ${table}`).first();
+async function nextId(db, table, idCol = "task_id") {
+  const row = await db.prepare(`SELECT COALESCE(MAX(${idCol}), 0) + 1 AS id FROM ${table}`).first();
   return Number(row?.id) || 1;
 }
 
@@ -129,7 +150,10 @@ export async function TasksFunction(env, subpath, method, body, session) {
       const fields = { ...(body?.fields || body || {}) };
       delete fields.table;
       fields.task_id = id;
-      if (fields.is_done === undefined) fields.is_done = 0;
+      const cols = await tableColumns(db, table);
+      for (const [k, v] of Object.entries(CREATE_DEFAULTS)) {
+        if (cols.has(k) && fields[k] === undefined) fields[k] = v;
+      }
       await insertRow(db, table, fields);
       const row = await getRow(db, table, id);
       return { created: true, table, task: row };
@@ -182,6 +206,54 @@ export async function TasksFunction(env, subpath, method, body, session) {
       if (!table.startsWith("trash_")) throw new Error("Purge is only allowed on trash tables");
       await db.prepare(`DELETE FROM ${table} WHERE task_id = ?`).bind(Number(body?.task_id)).run();
       return { purged: true, table, task_id: Number(body?.task_id) };
+    }
+
+    case "meta": {
+      const meta = {};
+      for (const [key, def] of Object.entries(LOOKUPS)) {
+        try {
+          const { results } = await db.prepare(`SELECT * FROM ${def.table} ORDER BY ${def.idCol}`).all();
+          meta[key] = results || [];
+        } catch {
+          meta[key] = [];
+        }
+      }
+      return { meta };
+    }
+
+    case "lookup": {
+      const entity = String(body?.entity || "");
+      const def = LOOKUPS[entity];
+      if (!def) throw new Error(`Unknown lookup entity: ${entity}`);
+      const op = String(body?.op || "");
+      const cols = await tableColumns(db, def.table);
+
+      if (op === "create") {
+        const id = await nextId(db, def.table, def.idCol);
+        const fields = pickFields({ ...(body?.fields || {}), [def.idCol]: id }, cols);
+        const keys = Object.keys(fields);
+        if (!keys.length) throw new Error("No writable fields provided");
+        await db.prepare(`INSERT INTO ${def.table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+          .bind(...keys.map((k) => fields[k])).run();
+        return { created: true, entity, id };
+      }
+
+      if (op === "update") {
+        const clean = pickFields(body?.fields || {}, cols);
+        delete clean[def.idCol];
+        const keys = Object.keys(clean);
+        if (!keys.length) throw new Error("No writable fields provided");
+        await db.prepare(`UPDATE ${def.table} SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE ${def.idCol} = ?`)
+          .bind(...keys.map((k) => clean[k]), Number(body?.id)).run();
+        return { updated: true, entity, id: Number(body?.id) };
+      }
+
+      if (op === "delete") {
+        await db.prepare(`DELETE FROM ${def.table} WHERE ${def.idCol} = ?`).bind(Number(body?.id)).run();
+        return { deleted: true, entity, id: Number(body?.id) };
+      }
+
+      throw new Error(`Unknown lookup op: ${op}`);
     }
 
     default:
