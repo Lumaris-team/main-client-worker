@@ -256,7 +256,60 @@ export async function TasksFunction(env, subpath, method, body, session) {
       throw new Error(`Unknown lookup op: ${op}`);
     }
 
+    case "templates": {
+      await ensureTemplatesTable(db);
+      const kind = String(body?.kind || "");
+      const sql = kind
+        ? "SELECT * FROM templates WHERE kind = ? ORDER BY template_id DESC"
+        : "SELECT * FROM templates ORDER BY template_id DESC";
+      const stmt = kind ? db.prepare(sql).bind(kind) : db.prepare(sql);
+      const { results } = await stmt.all();
+      return { templates: (results || []).map((r) => ({ ...r, payload: safeParse(r.payload) })) };
+    }
+
+    case "template-save": {
+      await ensureTemplatesTable(db);
+      const kind = String(body?.kind || "");
+      const name = String(body?.name || "").trim();
+      const payload = body?.payload;
+      if (!kind || !name || payload === undefined) throw new Error("kind, name and payload are required");
+      let id = Number(body?.template_id) || 0;
+      if (id) {
+        await db.prepare("UPDATE templates SET kind = ?, name = ?, payload = ? WHERE template_id = ?")
+          .bind(kind, name, JSON.stringify(payload), id).run();
+      } else {
+        id = await nextId(db, "templates", "template_id");
+        await db.prepare("INSERT INTO templates (template_id, kind, name, payload, created_at) VALUES (?, ?, ?, ?, datetime('now'))")
+          .bind(id, kind, name, JSON.stringify(payload)).run();
+      }
+      return { saved: true, template_id: id };
+    }
+
+    case "template-delete": {
+      await ensureTemplatesTable(db);
+      await db.prepare("DELETE FROM templates WHERE template_id = ?").bind(Number(body?.template_id)).run();
+      return { deleted: true, template_id: Number(body?.template_id) };
+    }
+
     default:
       throw new Error(`Unknown tasks action: ${action}`);
   }
+}
+
+function safeParse(v) {
+  if (typeof v !== "string") return v;
+  try { return JSON.parse(v); } catch { return v; }
+}
+
+let templatesReady = false;
+async function ensureTemplatesTable(db) {
+  if (templatesReady) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS templates (
+    template_id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`).run();
+  templatesReady = true;
 }
