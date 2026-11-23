@@ -11,6 +11,8 @@ import { Pomodoro } from "./backend/database/pomodoro.js";
 import { WebsitesFunction } from "./backend/database/websites.js";
 import { FilesFunction, initializeFolderArchitecture } from "./backend/database/files_management.js";
 import { TasksFunction } from "./backend/database/tasks.js";
+import { SubjectsFunction } from "./backend/database/subjects.js";
+import { LearningFunction } from "./backend/learning/index.js";
 import { ToolsFunction } from "./backend/tools/index.js";
 import { StatsFunction } from "./backend/settings/stats.js";
 import { CustomizationFunction } from "./backend/settings/customization.js";
@@ -153,6 +155,10 @@ export default {
           resp = await CustomizationFunction(env, url.pathname.slice("/api/settings/customization".length), method, body, session.payload);
         } else if (url.pathname === "/api/tasks" || url.pathname === "/api/tasks/" || url.pathname.startsWith("/api/tasks/")) {
           resp = await TasksFunction(env, url.pathname.slice("/api/tasks/".length), method, body, session.payload);
+        } else if (url.pathname === "/api/subjects" || url.pathname === "/api/subjects/" || url.pathname.startsWith("/api/subjects/")) {
+          resp = await SubjectsFunction(env, url.pathname.slice("/api/subjects/".length), method, body);
+        } else if (url.pathname === "/api/learning" || url.pathname === "/api/learning/" || url.pathname.startsWith("/api/learning/")) {
+          resp = await LearningFunction(env, url.pathname.slice("/api/learning/".length), method, body);
         };
         // Return response
         return new Response(JSON.stringify({
