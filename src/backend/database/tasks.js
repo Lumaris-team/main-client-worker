@@ -287,8 +287,23 @@ export async function TasksFunction(env, subpath, method, body, session) {
 
     case "template-delete": {
       await ensureTemplatesTable(db);
-      await db.prepare("DELETE FROM templates WHERE template_id = ?").bind(Number(body?.template_id)).run();
-      return { deleted: true, template_id: Number(body?.template_id) };
+      const id = Number(body?.template_id);
+      // Rows created from this template carry template_id inside additional_data —
+      // move them to the matching trash table before deleting the template.
+      const needle = `"template_id":"${id}"`;
+      for (const t of ["tasks", "events", "repeat_tasks", "repeat_events"]) {
+        try {
+          const { results } = await db.prepare(
+            `SELECT task_id FROM ${t} WHERE additional_data LIKE ?`
+          ).bind(`%${needle}%`).all();
+          const trash = t.includes("events") ? "trash_events" : "trash_tasks";
+          for (const r of results || []) {
+            try { await moveRow(db, t, trash, r.task_id); } catch { /* row may have vanished */ }
+          }
+        } catch { /* table/column may not exist */ }
+      }
+      await db.prepare("DELETE FROM templates WHERE template_id = ?").bind(id).run();
+      return { deleted: true, template_id: id };
     }
 
     default:
