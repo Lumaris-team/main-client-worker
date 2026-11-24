@@ -341,6 +341,57 @@ Answer in the same language as the question, concisely but completely (markdown 
   return { answer: answer.trim() || "No answer." };
 }
 
+async function aiComment(env, body) {
+  let context = "";
+  let label = "";
+
+  if (body?.lesson_id) {
+    const ch = await getChapter(env, body.lesson_id);
+    if (!ch) throw new Error("Chapter not found");
+    const subject = await getSubject(env, ch.subject_id);
+    label = ch.lesson_name || "chapter";
+    context = [
+      subject?.subject_name && `Subject: ${subject.subject_name}`,
+      `Chapter: ${ch.lesson_name || "untitled"}`,
+      ch.lesson_description && `Description: ${ch.lesson_description}`,
+      ch.teacher_notes && `Teacher notes (how she tests & expectations): ${ch.teacher_notes}`,
+      subject?.teacher_notes && `Subject teacher notes: ${subject.teacher_notes}`,
+      ch.tests_date && `Next test: ${ch.tests_date}`,
+      ch.session_date && `Session date: ${ch.session_date}`,
+      truncate(chapterSource(ch), 6000) && `Content excerpt:\n${truncate(chapterSource(ch), 6000)}`,
+    ].filter(Boolean).join("\n");
+  } else if (body?.subject_id) {
+    const subject = await getSubject(env, body.subject_id);
+    if (!subject) throw new Error("Subject not found");
+    label = subject.subject_name || "subject";
+    const { results: chapters } = await env.subjects_data.prepare(
+      "SELECT lesson_name, lesson_description, teacher_notes FROM chapters WHERE subject_id = ? ORDER BY lesson_id LIMIT 30"
+    ).bind(Number(body.subject_id)).all();
+    const chList = (chapters || []).map((c) => `- ${c.lesson_name || "untitled"}${c.lesson_description ? `: ${c.lesson_description}` : ""}${c.teacher_notes ? ` (notes prof: ${c.teacher_notes})` : ""}`).join("\n");
+    context = [
+      `Subject: ${subject.subject_name || "untitled"}`,
+      subject.comments && `Comments: ${subject.comments}`,
+      subject.tests_comments && `Tests comments: ${subject.tests_comments}`,
+      subject.teacher_notes && `Teacher notes (how she tests & expectations): ${subject.teacher_notes}`,
+      chList && `Chapters:\n${chList}`,
+    ].filter(Boolean).join("\n");
+  } else {
+    context = String(body?.context || "").trim();
+    if (!context) throw new Error("context is required");
+    label = "element";
+  }
+
+  const prompt = `You are a concise academic assistant. Write a short internal comment (2-4 sentences, markdown allowed) about "${label}" for a student dashboard.
+Summarize what matters: current state, what to watch, suggested next step. Base it ONLY on the information below — if there is little information, say the element is still empty and what to add first.
+Answer in French.
+
+=== INFORMATION ===
+${context}`;
+
+  const comment = (await fastAI(env, prompt, 800)).trim();
+  return { comment: comment || "Aucune information pour le moment — importez du contenu ou complétez les champs." };
+}
+
 async function testReport(env, body) {
   const ch = await getChapter(env, body?.lesson_id);
   if (!ch) throw new Error("Chapter not found");
@@ -396,6 +447,7 @@ export async function LearningFunction(env, subpath, method, body) {
     case "feedback": return await feedback(env, body);
     case "ask": return await ask(env, body);
     case "test-report": return await testReport(env, body);
+    case "ai-comment": return await aiComment(env, body);
     default: throw new Error(`Unknown learning action: ${action}`);
   }
 }
