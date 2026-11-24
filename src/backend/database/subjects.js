@@ -10,7 +10,50 @@
 const SUBJECT_DEFAULTS = { methods: "[]" };
 const CHAPTER_DEFAULTS = { is_method: 0, is_yearly: 0 };
 
+// Subject-level extras (teacher expectations for the whole subject).
+const SUBJECT_EXTRA_COLUMNS = [
+  ["teacher_notes", "TEXT"],
+];
+let subjectColumnsReady = false;
+
+async function ensureSubjectColumns(db) {
+  if (subjectColumnsReady) return;
+  try {
+    const { results } = await db.prepare("PRAGMA table_info(subjects)").all();
+    const existing = new Set((results || []).map((r) => r.name));
+    for (const [name, decl] of SUBJECT_EXTRA_COLUMNS) {
+      if (!existing.has(name)) {
+        await db.prepare(`ALTER TABLE subjects ADD COLUMN ${name} ${decl}`).run();
+      }
+    }
+    columnCache.delete("subjects");
+  } catch { /* subjects table may not exist yet */ }
+  subjectColumnsReady = true;
+}
+
+// Extra chapter columns added lazily — ALTER TABLE is cheap and idempotent.
+const CHAPTER_EXTRA_COLUMNS = [
+  ["session_date", "TEXT"],
+  ["awaiting_evaluation", "INTEGER DEFAULT 0"],
+  ["review_plan", "TEXT"],
+  ["teacher_notes", "TEXT"],
+];
+let chapterColumnsReady = false;
+
 const columnCache = new Map();
+
+async function ensureChapterColumns(db) {
+  if (chapterColumnsReady) return;
+  const { results } = await db.prepare("PRAGMA table_info(chapters)").all();
+  const existing = new Set((results || []).map((r) => r.name));
+  for (const [name, decl] of CHAPTER_EXTRA_COLUMNS) {
+    if (!existing.has(name)) {
+      await db.prepare(`ALTER TABLE chapters ADD COLUMN ${name} ${decl}`).run();
+    }
+  }
+  columnCache.delete("chapters");
+  chapterColumnsReady = true;
+}
 
 async function tableColumns(db, table) {
   const key = `${db === undefined ? "" : ""}${table}`;
@@ -55,6 +98,8 @@ export async function SubjectsFunction(env, subpath, method, body) {
   const db = env.subjects_data;
   if (!db) throw new Error("subjects_data D1 binding is not configured");
   const action = String(subpath || "").replace(/^\/+|\/+$/g, "") || "list";
+  await ensureSubjectColumns(db);
+  if (action.includes("chapter")) await ensureChapterColumns(db);
 
   switch (action) {
     case "list": {
