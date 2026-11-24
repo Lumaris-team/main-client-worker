@@ -46,6 +46,29 @@ const CREATE_DEFAULTS = {
 
 const columnCache = new Map();
 
+// Extra columns added lazily — ALTER TABLE is cheap and idempotent.
+const TASK_EXTRA_COLUMNS = [
+  ["linked_action", "TEXT"],
+];
+let taskColumnsReady = false;
+
+async function ensureTaskColumns(db) {
+  if (taskColumnsReady) return;
+  for (const table of Object.values(TABLES)) {
+    try {
+      const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+      const existing = new Set((results || []).map((r) => r.name));
+      for (const [name, decl] of TASK_EXTRA_COLUMNS) {
+        if (!existing.has(name)) {
+          await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`).run();
+        }
+      }
+      columnCache.delete(table);
+    } catch { /* table may not exist yet */ }
+  }
+  taskColumnsReady = true;
+}
+
 async function tableColumns(db, table) {
   if (!columnCache.has(table)) {
     try {
@@ -114,6 +137,7 @@ export async function TasksFunction(env, subpath, method, body, session) {
   const db = env.timetable;
   if (!db) throw new Error("timetable D1 binding is not configured");
   const action = String(subpath || "").replace(/^\/+|\/+$/g, "") || "list";
+  await ensureTaskColumns(db);
 
   switch (action) {
     case "list": {
@@ -217,6 +241,27 @@ export async function TasksFunction(env, subpath, method, body, session) {
         } catch {
           meta[key] = [];
         }
+      }
+      // Seed default learning methods once so tasks can be linked to them.
+      if (!meta.methods?.length) {
+        const defaults = [
+          ["Apprentissage", "Course learning / lesson intake"],
+          ["Révision", "Review sessions and spaced repetition"],
+          ["Ajout de leçon", "Importing lesson content (PDF, voice, OCR…)"],
+          ["Flashcards", "Flashcard generation and review"],
+          ["Tests & activités", "Exercise and test generation"],
+          ["Questions IA", "Asking the AI about the course"],
+          ["Évaluation", "Awaiting / taking an evaluation"],
+        ];
+        try {
+          for (const [name, description] of defaults) {
+            const id = await nextId(db, "methods", "method_id");
+            await db.prepare("INSERT INTO methods (method_id, name, description) VALUES (?, ?, ?)")
+              .bind(id, name, description).run();
+          }
+          const { results } = await db.prepare("SELECT * FROM methods ORDER BY method_id").all();
+          meta.methods = results || [];
+        } catch { /* methods table may not exist — leave empty */ }
       }
       return { meta };
     }

@@ -5,6 +5,9 @@ import { callModel } from "../ai/core.js";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 const FALLBACK_MODEL = "@cf/openai/gpt-oss-20b";
+// Fast model for remarks, corrections and Q&A — OSS 120B is reserved for
+// initial lesson / training / test generation.
+const FAST_MODEL = "@cf/meta/llama-3.2-3b-instruct";
 
 const COMPONENTS = [
   "ShortTextInput", "LongTextInput", "NumberInput", "MathInput", "CodeInput",
@@ -21,6 +24,17 @@ async function ai(env, prompt, maxTokens = 4000) {
   let res = await callModel(env, MODEL, prompt, { maxTokens });
   if (!res?.ok) res = await callModel(env, FALLBACK_MODEL, prompt, { maxTokens });
   if (!res?.ok) throw new Error(res?.error || "AI request failed");
+  return res.response || "";
+}
+
+async function fastAI(env, prompt, maxTokens = 1500) {
+  const res = await callModel(env, FAST_MODEL, prompt, { maxTokens });
+  if (!res?.ok) {
+    // Fall back to the small OSS model if the fast one is unavailable
+    const alt = await callModel(env, FALLBACK_MODEL, prompt, { maxTokens });
+    if (!alt?.ok) throw new Error(alt?.error || res?.error || "AI request failed");
+    return alt.response || "";
+  }
   return res.response || "";
 }
 
@@ -52,6 +66,7 @@ function extractJSON(text) {
 
 function chapterSource(ch) {
   return [
+    ch.teacher_notes && `=== TEACHER NOTES (how the teacher tests & her expectations) ===\n${ch.teacher_notes}`,
     ch.raw_lessons && `=== RAW LESSONS ===\n${ch.raw_lessons}`,
     ch.raw_recorded_lessons && `=== RECORDED LESSONS ===\n${ch.raw_recorded_lessons}`,
     ch.body && `=== EXISTING COURSE ===\n${ch.body}`,
@@ -65,6 +80,11 @@ function truncate(text, max) {
 
 async function getChapter(env, lessonId) {
   return env.subjects_data.prepare("SELECT * FROM chapters WHERE lesson_id = ?").bind(Number(lessonId)).first();
+}
+
+async function getSubject(env, subjectId) {
+  if (subjectId === undefined || subjectId === null || subjectId === "") return null;
+  return env.subjects_data.prepare("SELECT * FROM subjects WHERE subject_id = ?").bind(Number(subjectId)).first();
 }
 
 async function updateChapter(env, lessonId, fields) {
@@ -290,7 +310,7 @@ Decide if the answer is correct (allow equivalent formulations, minor formatting
 Respond with STRICT JSON only:
 {"correct": true|false, "score": 0-100, "comment": "short personalized remark in the same language as the exercise (1-3 sentences, explain the error or confirm mastery)", "hint": "one guiding hint if incorrect, else null"}`;
 
-  const raw = await ai(env, prompt, 1200);
+  const raw = await fastAI(env, prompt, 1200);
   const parsed = extractJSON(raw);
   return {
     correct: !!parsed?.correct,
@@ -298,6 +318,69 @@ Respond with STRICT JSON only:
     comment: parsed?.comment || (parsed?.correct ? "Correct!" : "Incorrect."),
     hint: parsed?.hint || null,
   };
+}
+
+async function ask(env, body) {
+  const ch = await getChapter(env, body?.lesson_id);
+  if (!ch) throw new Error("Chapter not found");
+  const question = String(body?.question || "").trim();
+  if (!question) throw new Error("question is required");
+
+  const source = truncate(chapterSource(ch), 30000);
+  const prompt = `You are a patient tutor. Answer the student's question using ONLY the course material below (supplement with general knowledge only when the material is silent, and say so).
+Chapter: ${ch.lesson_name || "untitled"}${ch.lesson_description ? ` — ${ch.lesson_description}` : ""}
+
+=== COURSE MATERIAL ===
+${source || "(no course content yet)"}
+
+Student question: ${question}
+
+Answer in the same language as the question, concisely but completely (markdown allowed). If the course doesn't cover it, say so honestly.`;
+
+  const answer = await fastAI(env, prompt, 2000);
+  return { answer: answer.trim() || "No answer." };
+}
+
+async function testReport(env, body) {
+  const ch = await getChapter(env, body?.lesson_id);
+  if (!ch) throw new Error("Chapter not found");
+  const subject = await getSubject(env, ch.subject_id);
+
+  const pct = Number(body?.pct);
+  const grade = body?.grade != null ? Number(body.grade) : null;
+  const notation = body?.notation != null ? Number(body.notation) : null;
+  const maxMin = Number(body?.max_minutes) || null;
+  const elapsedMin = Number(body?.elapsed_minutes) || null;
+  const correct = Number(body?.correct_count) || 0;
+  const total = Number(body?.total_count) || 0;
+  const answered = Number(body?.answered_count) || 0;
+
+  if (!Number.isFinite(pct)) throw new Error("pct is required");
+
+  const notes = [
+    ch.teacher_notes && `Chapter teacher notes: ${ch.teacher_notes}`,
+    subject?.teacher_notes && `Subject teacher notes: ${subject.teacher_notes}`,
+  ].filter(Boolean).join("\n");
+
+  const prompt = `You are a demanding but fair teacher writing end-of-test feedback.
+Chapter: ${ch.lesson_name || "untitled"}${ch.lesson_description ? ` — ${ch.lesson_description}` : ""}
+${subject?.subject_name ? `Subject: ${subject.subject_name}` : ""}
+${notes ? `\n=== TEACHER EXPECTATIONS ===\n${notes}` : ""}
+
+=== TEST RESULT ===
+Score: ${pct.toFixed(1)}%${grade != null && notation != null ? ` — grade ${grade}/${notation}` : ""}
+Exercises: ${correct}/${total} fully correct, ${answered}/${total} answered
+${maxMin ? `Allowed duration: ${maxMin} min${elapsedMin != null ? ` — used ${elapsedMin.toFixed(1)} min` : ""}` : ""}
+
+Write a short progression remark (3-5 sentences, markdown allowed) that:
+- reacts to the score honestly (celebrate real progress, don't inflate);
+- references the teacher's expectations when provided (what was expected vs what was shown);
+- gives 2-3 concrete next steps to improve;
+- mentions time management if a duration was set.
+Answer in the same language as the teacher notes (French if they are in French, otherwise English).`;
+
+  const remark = (await fastAI(env, prompt, 1200)).trim();
+  return { remark: remark || "Keep practicing — review the weak points and try again.", pct, grade, notation };
 }
 
 export async function LearningFunction(env, subpath, method, body) {
@@ -311,6 +394,8 @@ export async function LearningFunction(env, subpath, method, body) {
     case "flashcards": return await flashcards(env, body);
     case "activities": return await activities(env, body);
     case "feedback": return await feedback(env, body);
+    case "ask": return await ask(env, body);
+    case "test-report": return await testReport(env, body);
     default: throw new Error(`Unknown learning action: ${action}`);
   }
 }
