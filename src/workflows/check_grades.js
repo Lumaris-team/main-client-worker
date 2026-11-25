@@ -16,7 +16,12 @@ export class CheckGradesWorkflow extends WorkflowEntrypoint {
       const newGrades = await step.do("fetch-new-grades", async () => {
         return await EDfunction(env, "new-grades", "GET", headers, null);
       });
-      
+
+      // ÉcoleDirecte demands the 2FA questionnaire — only the client can answer it.
+      if (newGrades?.qcm_required) {
+        return { success: true, skipped: "qcm_required" };
+      }
+
       // Vérifier s'il y a des nouvelles notes et envoyer des notifications
       if (newGrades && typeof newGrades === "object" && Object.keys(newGrades).length > 0) {
         await step.do("send-notifications", async () => {

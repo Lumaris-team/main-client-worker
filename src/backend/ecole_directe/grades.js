@@ -2,7 +2,7 @@ import { setCacheValue } from "../cache/set.js";
 import { getCacheValue } from "../cache/get.js";
 
 export async function EDgrades(env, informations, filter) {
-  const ED_USER_AGENT = env.USER_AGENT;
+  const ED_USER_AGENT = env.USER_AGENT || "Lumaris-Dashboard/1.0 (+https://lumaris.fr)";
   const ED_VERSION = "4.75.0";
   function normalizeCookieHeader(rawCookies) {
     if (!rawCookies) return "";
