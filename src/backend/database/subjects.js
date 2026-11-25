@@ -13,6 +13,7 @@ const CHAPTER_DEFAULTS = { is_method: 0, is_yearly: 0 };
 // Subject-level extras (teacher expectations for the whole subject).
 const SUBJECT_EXTRA_COLUMNS = [
   ["teacher_notes", "TEXT"],
+  ["attachements_id", "TEXT"],
 ];
 let subjectColumnsReady = false;
 
@@ -37,6 +38,7 @@ const CHAPTER_EXTRA_COLUMNS = [
   ["awaiting_evaluation", "INTEGER DEFAULT 0"],
   ["review_plan", "TEXT"],
   ["teacher_notes", "TEXT"],
+  ["attachements_id", "TEXT"],
 ];
 let chapterColumnsReady = false;
 

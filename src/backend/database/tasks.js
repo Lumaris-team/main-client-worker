@@ -49,6 +49,7 @@ const columnCache = new Map();
 // Extra columns added lazily — ALTER TABLE is cheap and idempotent.
 const TASK_EXTRA_COLUMNS = [
   ["linked_action", "TEXT"],
+  ["attachements_id", "TEXT"],
 ];
 let taskColumnsReady = false;
 

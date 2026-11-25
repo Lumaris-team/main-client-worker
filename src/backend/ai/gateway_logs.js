@@ -1,20 +1,61 @@
 // Functions to fetch and parse Cloudflare Gateway AI logs
 
-// Get list of deleted conversation IDs from KV
-export async function getDeletedConversations(env) {
+// Deleted / censored conversation IDs live in the "storage" D1 database,
+// table "artificial-intelligence" (status: 'deleted' | 'censored').
+// KV (env.deleted_chats) is kept as a fallback when the binding is absent.
+const AI_TABLE = '"artificial-intelligence"';
+
+function storageDb(env) {
+  return env.storage || null;
+}
+
+async function kvDeletedList(env) {
   try {
     const deleted = await env.deleted_chats.get("deleted_list");
     return deleted ? JSON.parse(deleted) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+// Get list of deleted conversation IDs (D1 first, KV fallback)
+export async function getDeletedConversations(env) {
+  const db = storageDb(env);
+  if (db) {
+    try {
+      const { results } = await db
+        .prepare(`SELECT conversation_id FROM ${AI_TABLE} WHERE status = 'deleted'`)
+        .all();
+      return (results || []).map((row) => row.conversation_id);
+    } catch (error) {
+      console.error("Failed to get deleted conversations from D1:", error);
+    }
+  }
+  try {
+    return await kvDeletedList(env);
   } catch (error) {
     console.error("Failed to get deleted conversations:", error);
     return [];
   }
 }
 
-// Add a conversation to the deleted list
+// Add a conversation to the deleted list (D1, with KV fallback)
 export async function addDeletedConversation(env, conversationId) {
+  if (!conversationId) return;
+  const db = storageDb(env);
+  if (db) {
+    try {
+      await db
+        .prepare(`INSERT OR IGNORE INTO ${AI_TABLE} (conversation_id, status) VALUES (?, 'deleted')`)
+        .bind(conversationId)
+        .run();
+      return;
+    } catch (error) {
+      console.error("Failed to add deleted conversation to D1:", error);
+    }
+  }
   try {
-    const deleted = await getDeletedConversations(env);
+    const deleted = await kvDeletedList(env);
     if (!deleted.includes(conversationId)) {
       deleted.push(conversationId);
       await env.deleted_chats.put("deleted_list", JSON.stringify(deleted));
