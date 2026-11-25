@@ -2,15 +2,17 @@
 import { CheckGradesWorkflow } from "./workflows/check_grades.js";
 
 // API features
-// ÉcoleDirecte lives in ed-client-worker, reached through the ED_CLIENT
-// service binding — this worker only proxies /api/ed/* requests to it.
+// ÉcoleDirecte lives in ed-client-worker and MEGA storage in
+// mega-client-worker, both reached through service bindings — this worker
+// only proxies /api/ed/* and /api/files/* requests to them.
 import { AIfunction } from "./backend/ai/index.js";
 import { Cache } from "./backend/cache/index.js";
 import { Auth } from "./backend/auth/index.js";
 import { verifySessionToken } from "./backend/auth/session.js";
 import { Pomodoro } from "./backend/database/pomodoro.js";
 import { WebsitesFunction } from "./backend/database/websites.js";
-import { FilesFunction, initializeFolderArchitecture } from "./backend/database/files_management.js";
+import { megaFilesProxy } from "./backend/mega_client.js";
+import { StorageFunction, registerFile, removeFileByPath, renameFileRow } from "./backend/storage/index.js";
 import { TasksFunction } from "./backend/database/tasks.js";
 import { SubjectsFunction } from "./backend/database/subjects.js";
 import { LearningFunction } from "./backend/learning/index.js";
@@ -19,6 +21,34 @@ import { StatsFunction } from "./backend/settings/stats.js";
 import { CustomizationFunction } from "./backend/settings/customization.js";
   
 import { sendMail } from "./backend/notifications/mail.js";
+
+// Keep the storage D1 `files` table in sync with MEGA operations.
+// files.id = MEGA node ID — the value referenced by attachments_id.
+async function syncFilesTable(env, sub, method, body, resp) {
+  try {
+    if (method === "POST" && sub === "upload" && resp?.nodeId) {
+      const relativePath = body instanceof FormData ? body.get("relativePath") : body?.relativePath;
+      if (relativePath) {
+        await registerFile(env, {
+          id: resp.nodeId,
+          path: `files/${relativePath}`,
+          name: resp.name || relativePath.split("/").pop(),
+          size: resp.size,
+        });
+      }
+    } else if (method === "DELETE" && sub.startsWith("delete/")) {
+      const relativePath = decodeURIComponent(sub.slice("delete/".length));
+      await removeFileByPath(env, `files/${relativePath}`);
+    } else if (method === "POST" && sub === "rename" && body?.oldPath && body?.newName) {
+      const oldFull = `files/${body.oldPath}`;
+      const dir = body.oldPath.includes("/") ? body.oldPath.slice(0, body.oldPath.lastIndexOf("/")) : "";
+      const newFull = dir ? `${dir}/${body.newName}` : body.newName;
+      await renameFileRow(env, oldFull, `files/${newFull}`, body.newName);
+    }
+  } catch (e) {
+    console.error("syncFilesTable failed:", e?.message || e);
+  }
+}
 
 async function sendErrorEmail(env, error, context) {
   try {
@@ -154,6 +184,15 @@ export default {
           const edData = await edRes.json().catch(() => ({}));
           if (!edRes.ok) throw new Error(edData?.error || `ED worker error (${edRes.status})`);
           resp = edData;
+        } else if (url.pathname.startsWith("/api/files/")) {
+          // Files live in mega-client-worker via the MEGA_CLIENT binding;
+          // the storage D1 keeps the lightweight metadata (id = MEGA node ID)
+          if (!env.MEGA_CLIENT) throw new Error("MEGA_CLIENT service binding is not configured");
+          const sub = url.pathname.slice("/api/files/".length);
+          resp = await megaFilesProxy(env, sub, method, body, headers);
+          await syncFilesTable(env, sub, method, body, resp);
+        } else if (url.pathname.startsWith("/api/storage/")) {
+          resp = await StorageFunction(env, url.pathname.slice("/api/storage/".length), method, body);
         } else if (url.pathname.startsWith("/api/ai/")) {
           resp = await AIfunction(env, url.pathname.slice("/api/ai/".length), method, headers, body, request);
         } else if (url.pathname.startsWith("/api/pomodoro/")) {
@@ -162,8 +201,6 @@ export default {
           resp = await WebsitesFunction(env, url.pathname.slice("/api/websites/".length), method, body);
         } else if (url.pathname.startsWith("/api/tools/")) {
           resp = await ToolsFunction(env, url.pathname.slice("/api/tools/".length), method, body);
-        } else if (url.pathname.startsWith("/api/files/")) {
-          resp = await FilesFunction(env, url.pathname.slice("/api/files/".length), method, body);
         } else if (url.pathname === "/api/settings/stats" || url.pathname === "/api/settings/stats/") {
           resp = await StatsFunction(env);
         } else if (url.pathname === "/api/settings/customization" || url.pathname === "/api/settings/customization/") {

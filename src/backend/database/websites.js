@@ -1,10 +1,10 @@
-import { megaRead, megaWrite } from "./mega.js";
+import { megaStateGet, megaStatePut } from "../mega_client.js";
 
 const WEBSITES_FILE = "websites/websites.json";
 
 async function readWebsites(env, forceRefresh = false) {
   try {
-    const websites = await megaRead(env, WEBSITES_FILE, null, forceRefresh);
+    const websites = await megaStateGet(env, WEBSITES_FILE);
     if (Array.isArray(websites)) {
       return websites;
     }
@@ -18,7 +18,7 @@ async function readWebsites(env, forceRefresh = false) {
 }
 
 async function writeWebsites(env, websites) {
-  return await megaWrite(env, WEBSITES_FILE, websites);
+  return await megaStatePut(env, WEBSITES_FILE, websites);
 }
 
 // AJOUTER un site web

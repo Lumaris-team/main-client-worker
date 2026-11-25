@@ -1,4 +1,4 @@
-import { megaRead, megaWrite, getClient } from "./mega.js";
+import { megaStateGet, megaStatePut, megaPing } from "../mega_client.js";
 import { getCacheValue, setCacheValue } from "../cache/index.js";
 
 const VALID_DAYS = [
@@ -15,7 +15,7 @@ const CACHE_TTL = 3600; // 1 heure
 // Fonction pour établir la connexion MEGA et la mettre en cache
 export async function loginMega(env) {
   try {
-    const storage = await getClient(env);
+    await megaPing(env);
     
     // Mettre la connexion en cache pendant 30 minutes
     try {
@@ -40,16 +40,15 @@ export async function loginMega(env) {
 // Fonction pour récupérer tous les jours sans cache (lecture directe depuis MEGA)
 export async function readAllDays(env) {
   const allDays = {};
-  const { getClient } = await import("./mega.js");
-  let storage = null;
-  
+
   try {
-    storage = await getClient(env);
-    
+    // Ping MEGA once before reading all days
+    await megaPing(env);
+
     for (const day of VALID_DAYS) {
       try {
         console.log(`Reading ${day} from MEGA...`);
-        const subjects = await readDay(env, day, storage);
+        const subjects = await readDay(env, day);
         allDays[day] = subjects;
         console.log(`Read ${day} from MEGA:`, subjects);
       } catch (e) {
@@ -154,7 +153,7 @@ async function readState(env) {
   }
 
   try {
-    const state = await megaRead(env, STATE_FILE);
+    const state = await megaStateGet(env, STATE_FILE);
     if (state && typeof state === "object" && !Array.isArray(state)) {
       const result = {
         timerCount: Number(state.timerCount) || 0,
@@ -188,7 +187,7 @@ async function saveState(env, state) {
       ? state.checked
       : {},
   };
-  const result = await megaWrite(env, STATE_FILE, safeState);
+  const result = await megaStatePut(env, STATE_FILE, safeState);
   
   // Mettre à jour le cache
   try {
@@ -248,15 +247,15 @@ async function saveDayTimerCount(day, count) {
   }
 }
 
-export async function readDay(env, day, storage = null) {
+export async function readDay(env, day) {
   const normalized = validateDay(day);
   const fullPath = filePath(normalized);
-  
+
   console.log(`readDay called for ${day}, normalized: ${normalized}, fullPath: ${fullPath}`);
 
   try {
     console.log(`Reading from MEGA: ${fullPath}`);
-    const result = await megaRead(env, fullPath, storage);
+    const result = await megaStateGet(env, fullPath);
     console.log(`MEGA result for ${day}:`, result, `Type: ${typeof result}`);
     
     if (Array.isArray(result)) {
@@ -291,7 +290,7 @@ export async function saveDay(env, day, subjects) {
     throw new Error("Invalid subjects");
   }
 
-  const result = await megaWrite(env, filePath(normalized), subjects);
+  const result = await megaStatePut(env, filePath(normalized), subjects);
   
   // Mettre à jour le cache avec un TTL plus long pour s'assurer que les données sont disponibles
   const cacheKey = `${CACHE_PREFIX}${normalized}`;

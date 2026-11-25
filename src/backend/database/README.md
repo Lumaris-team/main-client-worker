@@ -142,71 +142,14 @@ export async function WebsitesFunction(env, subpath, method, body)
 }
 ```
 
-### File Management (`files_management.js`)
+### File Management & MEGA (`mega-client-worker`)
 
-**Purpose**: Comprehensive file management with MEGA integration
-
-**Key Function**:
-```javascript
-export async function FilesFunction(env, subpath, method, body)
-export async function initializeFolderArchitecture(env, userId)
-```
-
-**Features**:
-- File upload/download
-- Folder organization
-- File metadata management
-- Storage statistics
-- User folder initialization
-
-**API Endpoints**:
-- `GET /api/files/*`: Get files/folders
-- `POST /api/files/upload`: Upload file
-- `DELETE /api/files/*`: Delete file/folder
-- `PUT /api/files/*`: Update file metadata
-
-**Data Model**:
-```javascript
-{
-  id: Number,
-  user_id: String,
-  name: String,           // File name
-  type: String,           // File type (file/folder)
-  size: Number,           // File size in bytes
-  mime_type: String,      // MIME type
-  mega_id: String,        // MEGA file ID
-  parent_id: Number,      // Parent folder ID
-  path: String,           // File path
-  created_at: String,     // Creation timestamp
-  updated_at: String      // Update timestamp
-}
-```
-
-
-### MEGA Integration (`mega.js`)
-
-**Purpose**: MEGA.nz cloud storage integration
-
-**Key Functions**:
-```javascript
-export async function uploadToMEGA(env, file, userId)
-export async function downloadFromMEGA(env, megaId)
-export async function deleteFromMEGA(env, megaId)
-export async function getMEGAStorageStats(env, userId)
-```
-
-**Features**:
-- File upload/download
-- Folder management
-- Storage statistics
-- Error handling
-- Retry logic
-
-**MEGA Integration**:
-- Uses megajs library for MEGA API
-- Handles authentication automatically
-- Manages file/folder operations
-- Tracks storage usage
+**Purpose**: User files and MEGA cloud storage are owned by the dedicated
+`mega-client-worker`, reached through the `MEGA_CLIENT` service binding.
+This worker only proxies `/api/files/*` requests (`mega_client.js`) and
+reads/writes small state files via `megaStateGet`/`megaStatePut`
+(`websites.js`, `pomodoro.js`, `storage_stats.js`). User file downloads
+return public MEGA URLs — file content is never loaded in a Worker.
 
 ### Storage Statistics (`storage_stats.js`)
 
@@ -511,11 +454,8 @@ User Root Folder
 ### Storage Management
 
 **Initialization**:
-```javascript
-await initializeFolderArchitecture(env, userId);
-```
-
-This creates the standard folder structure for new users.
+Folder bootstrap (`lumaris/files`) is handled inside `mega-client-worker`
+(`POST /init`); this worker does not create MEGA folders directly.
 
 **Statistics Tracking**:
 ```javascript

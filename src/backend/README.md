@@ -61,8 +61,7 @@ backend/
 ├── database/              # Database operations
 │   ├── pomodoro.js       # Pomodoro timer data
 │   ├── websites.js       # Website blocking rules
-│   ├── files_management.js # File management operations
-│   ├── mega.js           # MEGA storage integration
+│   ├── mega_client.js    # mega-client-worker service-binding client
 │   ├── storage_stats.js  # Storage statistics
 │   └── notes.js          # General note operations
 ├── notifications/         # Notification services
@@ -196,9 +195,7 @@ try {
 **Key Functions**:
 - `Pomodoro(env, subpath, method, body)`: Pomodoro timer operations
 - `WebsitesFunction(env, subpath, method, body)`: Website blocking rules
-- `FilesFunction(env, subpath, method, body)`: File management
-- `StudyNotesFunction(env, subpath, method, body)`: Study notes operations
-- `initializeFolderArchitecture(env, userId)`: Initialize user folders
+- `megaFilesProxy(env, sub, method, body, headers)`: `/api/files/*` proxy to mega-client-worker
 
 **API Endpoints**:
 - `GET/POST /api/pomodoro/*`: Pomodoro timer management
@@ -517,16 +514,19 @@ CLOUDFLARE_ACCOUNT_ID = "your_account_id"
 
 **Authentication**: Token-based authentication with ÉcoleDirecte
 
-### MEGA.nz API
+### MEGA.nz API (`mega-client-worker`)
 
-**Purpose**: Cloud storage integration
+**Purpose**: Cloud storage integration — owned by the dedicated
+`mega-client-worker`, reached via the `MEGA_CLIENT` service binding.
 
 **Usage**:
-- File upload/download
-- Folder management
-- Storage organization
+- `/api/files/*` proxied to the MEGA worker (`mega_client.js`)
+- Small state files (pomodoro, websites) via `megaStateGet`/`megaStatePut`
+- Storage stats via `megaStats`
+- User file downloads return public MEGA URLs (no content loaded in Workers)
 
-**Dependencies**: megajs library
+**Dependencies**: `MEGA_CLIENT` service binding; credentials live on
+`mega-client-worker`
 
 ### Email Service
 

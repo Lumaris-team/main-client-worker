@@ -1,53 +1,15 @@
-import { getClient, getFolderIfExists } from "./mega.js";
+import { megaStats } from "../mega_client.js";
 
-const FILES_ROOT = "files";
-
-async function getFolderSize(env, folderPath) {
-  try {
-    const storage = await getClient(env);
-    const folder = await getFolderIfExists(storage, folderPath);
-
-    if (!folder) {
-      return 0;
-    }
-
-    let totalSize = 0;
-
-    // Recursive function to calculate folder size
-    async function calculateSize(node) {
-      if (node.directory) {
-        const children = await node.children;
-        for (const child of children) {
-          await calculateSize(child);
-        }
-      } else {
-        totalSize += node.size || 0;
-      }
-    }
-
-    await calculateSize(folder);
-    return totalSize;
-  } catch (error) {
-    console.error(`Error calculating size for ${folderPath}:`, error);
-    return 0;
-  }
-}
-
+// Storage usage is computed inside mega-client-worker (it owns the MEGA
+// session). This worker just relays the numbers.
 export async function getStorageStats(env) {
   try {
-    // Get storage usage for files folder
-    const filesBytes = await getFolderSize(env, FILES_ROOT);
-
-    const totalBytes = filesBytes;
-
-    // Default capacity (can be adjusted based on your plan)
-    const capacityGB = 20;
-
+    const stats = await megaStats(env, "files");
     return {
-      totalBytes,
-      capacityGB,
-      items: [
-        { key: "files/", label: "lumaris/files/", bytes: filesBytes },
+      totalBytes: stats.totalBytes || 0,
+      capacityGB: stats.capacityGB || 20,
+      items: stats.items || [
+        { key: "files/", label: "lumaris/files/", bytes: 0 },
       ]
     };
   } catch (error) {
