@@ -43,7 +43,6 @@ src/
 │   ├── ai/               # AI-powered features
 │   ├── cache/            # Caching layer
 │   ├── database/         # Database operations
-│   ├── ecole_directe/    # ÉcoleDirecte integration
 │   ├── notifications/    # Notification services
 │   ├── settings/         # Settings management
 │   └── tools/            # Utility tools
@@ -133,11 +132,9 @@ The backend follows a service-oriented architecture:
 - Conversation management
 - Usage tracking and limits
 
-**School Integration (`ecole_directe/`):**
-- Grade retrieval
-- Homework management
-- Timetable access
-- Student information
+**School Integration (via `ed-client-worker`):**
+- Grade retrieval, homework and timetable are proxied to the dedicated
+  `ed-client-worker` through the `ED_CLIENT` service binding (`/api/ed/*`)
 
 **Database Operations (`database/`):**
 - D1 database queries
@@ -214,7 +211,6 @@ The backend follows a service-oriented architecture:
 ```javascript
 // Main entry point imports
 import { CheckGradesWorkflow } from "./workflows/check_grades";
-import { EDfunction } from "./backend/ecole_directe/index.js";
 import { AIfunction } from "./backend/ai/index.js";
 import { Cache } from "./backend/cache/index.js";
 import { Auth, verifySessionToken } from "./backend/auth/index.js";

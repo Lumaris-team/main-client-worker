@@ -167,7 +167,6 @@ client-worker/
 │   │   ├── ai/               # AI services
 │   │   ├── cache/            # Cache
 │   │   ├── database/         # Database operations
-│   │   ├── ecole_directe/    # School integration
 │   │   ├── notifications/    # Notifications
 │   │   ├── settings/         # Settings
 │   └── tools/            # Utility tools

@@ -65,12 +65,6 @@ backend/
 │   ├── mega.js           # MEGA storage integration
 │   ├── storage_stats.js  # Storage statistics
 │   └── notes.js          # General note operations
-├── ecole_directe/         # ÉcoleDirecte integration
-│   ├── index.js          # Main ÉcoleDirecte API handler
-│   ├── informations.js   # Student information
-│   ├── grades.js         # Grade management
-│   ├── homeworks.js      # Homework management
-│   └── timetable.js      # Timetable access
 ├── notifications/         # Notification services
 │   ├── index.js          # Main notifications API handler
 │   ├── mail.js           # Email notifications
@@ -213,28 +207,18 @@ try {
 
 **Dependencies**: D1 database, MEGA API
 
-### ÉcoleDirecte Service (`ecole_directe/`)
+### ÉcoleDirecte Service (via `ed-client-worker`)
 
-**Purpose**: Integrate with French school system (ÉcoleDirecte)
+**Purpose**: proxy to the dedicated `ed-client-worker`, which owns the whole
+ÉcoleDirecte session (login, cookies, token cache, 2FA QCM relay).
 
 **Key Functions**:
-- `EDfunction(env, subpath, method, headers, body)`: Main ÉcoleDirecte handler
-- `EDinformations(env, newToken)`: Get student information
-- `EDgrades(env, informations, filter)`: Get student grades
-- `EDaverages(gradesData)`: Calculate grade averages
-- `EDhomeworks(env, informations, filter)`: Get homework assignments
-- `EDtimetable(env, informations, filter)`: Get student timetable
+- `/api/ed/*` requests are forwarded to `env.ED_CLIENT.fetch(...)` — a service
+  binding declared in `wrangler.jsonc` (`services: [{ binding: "ED_CLIENT",
+  service: "ed-client-worker" }]`)
+- The `check_grades` workflow calls `env.ED_CLIENT` directly for `new-grades`
 
-**API Endpoints**:
-- `GET /api/ed/info`: Get student information
-- `GET /api/ed/grades`: Get student grades
-- `GET /api/ed/averages`: Get grade averages
-- `GET /api/ed/new-grades`: Get new grades since last check
-- `GET /api/ed/homeworks`: Get homework assignments
-- `POST /api/ed/homeworks`: Mark homework as done
-- `GET /api/ed/timetable`: Get student timetable
-
-**Dependencies**: ÉcoleDirecte API
+See the `ed-client-worker` repository for the ED API surface and docs.
 
 ### Notifications Service (`notifications/`)
 
@@ -718,7 +702,7 @@ For detailed information about specific services, see:
 
 - <ref_file file="/Users/danielersen/Projets/Lumaris/client-worker/src/backend/auth/README.md" /> - Authentication service
 - <ref_file file="/Users/danielersen/Projets/Lumaris/client-worker/src/backend/ai/README.md" /> - AI service
-- <ref_file file="/Users/danielersen/Projets/Lumaris/client-worker/src/backend/ecole_directe/README.md" /> - ÉcoleDirecte integration
+- <ref_file file="/Users/danielersen/Projets/Lumaris/ed_client_worker/src/backend/ecole_directe/README.md" /> - ÉcoleDirecte integration
 - <ref_file file="/Users/danielersen/Projets/Lumaris/client-worker/src/backend/database/README.md" /> - Database operations
 
 ---
