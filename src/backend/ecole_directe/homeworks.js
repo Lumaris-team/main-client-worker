@@ -1,5 +1,5 @@
 export async function EDhomeworks(env, informations, filter) {
-  const ED_USER_AGENT = env.USER_AGENT;
+  const ED_USER_AGENT = env.USER_AGENT || "Lumaris-Dashboard/1.0 (+https://lumaris.fr)";
   const ED_VERSION = "4.75.0";
   function normalizeCookieHeader(rawCookies) {
     if (!rawCookies) return "Cookies error";
@@ -238,7 +238,7 @@ export async function EDhomeworks(env, informations, filter) {
 }
 
 export async function EDhomeworksDone(env, informations, id, done) {
-  const ED_USER_AGENT = env.USER_AGENT;
+  const ED_USER_AGENT = env.USER_AGENT || "Lumaris-Dashboard/1.0 (+https://lumaris.fr)";
   const ED_VERSION = "4.75.0";
   function toBool(v) {
     if (typeof v === "boolean") return v;

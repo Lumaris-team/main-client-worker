@@ -1,5 +1,5 @@
 export async function EDtimetable(env, informations, filter) {
-  const ED_USER_AGENT = env.USER_AGENT;
+  const ED_USER_AGENT = env.USER_AGENT || "Lumaris-Dashboard/1.0 (+https://lumaris.fr)";
   const ED_VERSION = "4.75.0";
   function normalizeCookieHeader(rawCookies) {
     if (!rawCookies) return "";

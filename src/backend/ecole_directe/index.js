@@ -1,4 +1,4 @@
-import { EDinformations } from "./informations.js";
+import { EDinformations, EDanswerQCM } from "./informations.js";
 import { EDgrades, EDaverages, EDnewgrades } from "./grades.js"
 import { EDhomeworks, EDhomeworksDone } from "./homeworks.js"
 import { EDtimetable } from "./timetable.js"
@@ -20,8 +20,16 @@ export async function EDfunction (env, subpath, method, headers, body) {
   if (subpath === "info" && method === "GET") {
     return await EDinformations(env, new_token)
   }
-  
+
+  // QCM 2FA answer relayed from the client
+  if (subpath === "qcm" && method === "POST" && Number.isInteger(body?.choice)) {
+    return await EDanswerQCM(env, body.choice)
+  }
+
   const informations = await EDinformations(env, false)
+  if (informations?.qcm_required) {
+    return informations
+  }
   if (
     subpath === "grades" && 
     method === "GET"

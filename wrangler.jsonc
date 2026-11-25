@@ -8,6 +8,20 @@
     "MODE": "production",
     "SITE": "enabled"
   },
+  // ÉcoleDirecte credentials — resolved from the account Secrets Store at deploy
+  // time by update-client-account (binding name == secret name == env var name).
+  "secrets_store_secrets": [
+    {
+      "binding": "ED_USERNAME",
+      "store_id": "__SECRET_STORE_ID__",
+      "secret_name": "ED_USERNAME"
+    },
+    {
+      "binding": "ED_PASSWORD",
+      "store_id": "__SECRET_STORE_ID__",
+      "secret_name": "ED_PASSWORD"
+    }
+  ],
   "env": {
     "production": {
       "vars": {
