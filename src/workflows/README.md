@@ -101,13 +101,17 @@ try {
 #### Step 1: Fetch New Grades
 ```javascript
 const newGrades = await step.do("fetch-new-grades", async () => {
-  return await EDfunction(env, "new-grades", "GET", headers, null);
+  const res = await env.ED_CLIENT.fetch(new Request("https://ed.internal/new-grades", {
+    headers: { "filter": "true", "new_token": "false" }
+  }));
+  if (!res.ok) throw new Error(`ed-client-worker error (${res.status})`);
+  return await res.json();
 });
 ```
 
 **Process**:
-- Calls ÉcoleDirecte API with filter for new grades only
-- Uses cached authentication token
+- Calls ed-client-worker (`new-grades`) via the `ED_CLIENT` service binding
+- The ED worker owns login, token cache and the 2FA QCM relay
 - Returns structured grade data by period and subject
 
 #### Step 2: Send Notifications
@@ -133,7 +137,7 @@ await step.do("send-notifications", async () => {
 - Handles multiple grades in the same subject
 
 **Dependencies**:
-- `EDfunction`: ÉcoleDirecte API integration
+- `env.ED_CLIENT`: ed-client-worker service binding
 - `sendNotifierMessage`: Notification service
 
 **Error Handling**:
@@ -352,7 +356,7 @@ Test complete workflow execution:
 
 ```javascript
 test("CheckGradesWorkflow sends notifications for new grades", async () => {
-  // Mock EDfunction to return new grades
+  // Mock env.ED_CLIENT.fetch to return new grades
   // Mock sendNotifierMessage
   // Execute workflow
   // Verify notifications were sent

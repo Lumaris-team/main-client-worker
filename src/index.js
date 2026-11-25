@@ -2,7 +2,8 @@
 import { CheckGradesWorkflow } from "./workflows/check_grades.js";
 
 // API features
-import { EDfunction } from "./backend/ecole_directe/index.js";
+// ÉcoleDirecte lives in ed-client-worker, reached through the ED_CLIENT
+// service binding — this worker only proxies /api/ed/* requests to it.
 import { AIfunction } from "./backend/ai/index.js";
 import { Cache } from "./backend/cache/index.js";
 import { Auth } from "./backend/auth/index.js";
@@ -135,10 +136,24 @@ export default {
         });
       }
       try {
-        // Ecole directe paths
+        // Ecole directe paths → proxied to ed-client-worker via service binding
         let resp;
         if (url.pathname.startsWith("/api/ed/")) {
-          resp = await EDfunction(env, url.pathname.slice("/api/ed/".length), method, headers, body);
+          if (!env.ED_CLIENT) throw new Error("ED_CLIENT service binding is not configured");
+          const sub = url.pathname.slice("/api/ed/".length);
+          const edHeaders = new Headers();
+          for (const h of ["filter", "new_token", "new-token", "content-type"]) {
+            const v = headers.get(h);
+            if (v) edHeaders.set(h, v);
+          }
+          const edRes = await env.ED_CLIENT.fetch(new Request(`https://ed.internal/${sub}`, {
+            method,
+            headers: edHeaders,
+            body: method === "GET" || method === "HEAD" ? undefined : JSON.stringify(body ?? {}),
+          }));
+          const edData = await edRes.json().catch(() => ({}));
+          if (!edRes.ok) throw new Error(edData?.error || `ED worker error (${edRes.status})`);
+          resp = edData;
         } else if (url.pathname.startsWith("/api/ai/")) {
           resp = await AIfunction(env, url.pathname.slice("/api/ai/".length), method, headers, body, request);
         } else if (url.pathname.startsWith("/api/pomodoro/")) {

@@ -1,5 +1,4 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
-import { EDfunction } from "../backend/ecole_directe/index.js";
 import { sendNotifierMessage } from "../backend/notifications/notifier.js";
 
 export class CheckGradesWorkflow extends WorkflowEntrypoint {
@@ -7,14 +6,14 @@ export class CheckGradesWorkflow extends WorkflowEntrypoint {
     const env = this.env;
     
     try {
-      // Récupérer les nouvelles notes via EDfunction
-      const headers = new Headers({
-        "filter": "true",
-        "new_token": "false"
-      });
-      
+      // Récupérer les nouvelles notes via ed-client-worker (service binding)
       const newGrades = await step.do("fetch-new-grades", async () => {
-        return await EDfunction(env, "new-grades", "GET", headers, null);
+        if (!env.ED_CLIENT) throw new Error("ED_CLIENT service binding is not configured");
+        const res = await env.ED_CLIENT.fetch(new Request("https://ed.internal/new-grades", {
+          headers: { "filter": "true", "new_token": "false" }
+        }));
+        if (!res.ok) throw new Error(`ed-client-worker error (${res.status})`);
+        return await res.json();
       });
 
       // ÉcoleDirecte demands the 2FA questionnaire — only the client can answer it.
