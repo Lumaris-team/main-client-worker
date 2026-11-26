@@ -51,7 +51,7 @@
       "class_name": "CheckGradesWorkflow"
     }
   ],
-  // No cron here — scheduled jobs moved to the `crois` worker.
+  // No cron here — scheduled jobs moved to the `crons-client-worker`.
   // NOTE: the check_grades workflow is no longer triggered automatically.
   "observability": {
     "enabled": true,
