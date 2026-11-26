@@ -22,7 +22,14 @@ export async function Auth(env, path, method, body, request) {
     try {
       const response = await authWorker.fetch("https://authentication-client-worker/api/renew-jwt", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "CF-Connecting-IP": ip },
+        headers: {
+          "Content-Type": "application/json",
+          "CF-Connecting-IP": ip,
+          // Cloudflare may rewrite CF-Connecting-IP on service-binding
+          // subrequests — carry the client IP in a private header too so the
+          // auth worker can still match it against the login-time record.
+          "X-Lumaris-Client-IP": ip,
+        },
         body: JSON.stringify({ username, oneTimeToken }),
       });
 
