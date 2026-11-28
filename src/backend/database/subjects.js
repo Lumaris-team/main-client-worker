@@ -39,12 +39,14 @@ const CHAPTER_EXTRA_COLUMNS = [
   ["review_plan", "TEXT"],
   ["teacher_notes", "TEXT"],
   ["attachements_id", "TEXT"],
+  ["mastery", "TEXT"],
+  ["gaps", "TEXT"],
 ];
 let chapterColumnsReady = false;
 
 const columnCache = new Map();
 
-async function ensureChapterColumns(db) {
+export async function ensureChapterColumns(db) {
   if (chapterColumnsReady) return;
   const { results } = await db.prepare("PRAGMA table_info(chapters)").all();
   const existing = new Set((results || []).map((r) => r.name));

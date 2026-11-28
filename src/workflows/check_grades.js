@@ -36,11 +36,16 @@ export class CheckGradesWorkflow extends WorkflowEntrypoint {
                 
                 const gradeBrief = notes.length === 1 ? "New grade" : "New grades";
                 
-                // Envoyer la notification
-                await sendNotifierMessage(env, {
-                  title: `${gradeBrief} in ${matiere}`,
-                  message: `${gradeBrief}: ${gradeTexts} in ${matiere} (Period: ${periode})`
-                });
+                // Envoyer la notification — un échec ne doit pas empêcher
+                // les notifications des matières suivantes.
+                try {
+                  await sendNotifierMessage(env, {
+                    title: `${gradeBrief} in ${matiere}`,
+                    message: `${gradeBrief}: ${gradeTexts} in ${matiere} (Period: ${periode})`
+                  });
+                } catch (notifyError) {
+                  console.error(`Notifier failed for ${matiere}:`, notifyError);
+                }
               }
             }
           }

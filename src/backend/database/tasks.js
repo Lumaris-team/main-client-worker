@@ -50,6 +50,12 @@ const columnCache = new Map();
 const TASK_EXTRA_COLUMNS = [
   ["linked_action", "TEXT"],
   ["attachements_id", "TEXT"],
+  ["scope", "TEXT"],
+  ["after_class", "INTEGER"],
+  // Repeat-only columns must exist on trash tables too, otherwise moveRow
+  // drops them and a restored recurring task loses its schedule forever.
+  ["frequency", "TEXT"],
+  ["excludes_periods", "TEXT"],
 ];
 let taskColumnsReady = false;
 
@@ -102,6 +108,22 @@ function pickFields(row, columns) {
 async function nextId(db, table, idCol = "task_id") {
   const row = await db.prepare(`SELECT COALESCE(MAX(${idCol}), 0) + 1 AS id FROM ${table}`).first();
   return Number(row?.id) || 1;
+}
+
+// task_id has no UNIQUE constraint and trash/restore moves rows between
+// tables. nextId must span ALL task tables, otherwise a trashed id can be
+// re-issued to a new row and a later restore lands a duplicate task_id in
+// the same table (updates then hit an arbitrary row).
+async function nextTaskId(db) {
+  let max = 0;
+  for (const table of Object.values(TABLES)) {
+    try {
+      const row = await db.prepare(`SELECT COALESCE(MAX(task_id), 0) AS m FROM ${table}`).first();
+      const m = Number(row?.m) || 0;
+      if (m > max) max = m;
+    } catch { /* table may not exist yet */ }
+  }
+  return max + 1;
 }
 
 async function insertRow(db, table, fields) {
@@ -171,7 +193,7 @@ export async function TasksFunction(env, subpath, method, body, session) {
       if (!["tasks", "repeat_tasks", "events", "repeat_events"].includes(table)) {
         throw new Error("Cannot create directly into a trash table");
       }
-      const id = await nextId(db, table);
+      const id = await nextTaskId(db);
       const fields = { ...(body?.fields || body || {}) };
       delete fields.table;
       fields.task_id = id;
@@ -218,10 +240,23 @@ export async function TasksFunction(env, subpath, method, body, session) {
     case "restore": {
       const table = resolveTable(body?.table || "trash_tasks");
       if (!RESTORE_TARGET[table]) throw new Error(`Cannot restore from ${table}`);
-      // A row carrying a frequency comes back as a repeat task.
+      // A row carrying a real recurrence comes back as a repeat task/event.
+      // "custom" is the no-schedule default — it must NOT count as recurring.
+      // Rows trashed before frequency/excludes_periods existed on trash tables
+      // still carry the schedule inside additional_data.recurrence — check it too.
       const source = await getRow(db, table, body?.task_id);
-      const hasFreq = source && (source.frequency || (typeof source.excludes_periods === "string" && source.excludes_periods));
-      const target = hasFreq && table === "trash_tasks" ? "repeat_tasks" : RESTORE_TARGET[table];
+      let adRec = null;
+      try {
+        const ad = typeof source?.additional_data === "string" ? JSON.parse(source.additional_data) : source?.additional_data;
+        if (ad?.recurrence && typeof ad.recurrence === "object" && !Array.isArray(ad.recurrence)) adRec = ad.recurrence;
+      } catch {}
+      const freq = source?.frequency || adRec?.freq;
+      const hasFreq = !!(freq && freq !== "custom")
+        || !!(typeof source?.excludes_periods === "string" && source.excludes_periods.trim())
+        || !!adRec;
+      const target = hasFreq
+        ? (table === "trash_events" ? "repeat_events" : "repeat_tasks")
+        : RESTORE_TARGET[table];
       const moved = await moveRow(db, table, target, body?.task_id);
       return { restored: true, from: table, to: target, task: moved };
     }

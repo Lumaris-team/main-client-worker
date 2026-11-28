@@ -73,9 +73,13 @@ export async function Auth(env, path, method, body, request) {
       }
 
       const payload = decodeJwtPart(payloadB64);
+      if (!payload || typeof payload !== "object") {
+        return { valid: false, reason: "jwt_parse_error" };
+      }
       const now = Math.floor(Date.now() / 1000);
       
-      if (payload.exp < now) {
+      // A token without a numeric exp never expires — reject it outright.
+      if (typeof payload.exp !== "number" || payload.exp < now) {
         return { valid: false, reason: "jwt_expired" };
       }
 

@@ -29,9 +29,9 @@ export async function verifySessionToken(env, token) {
     return { valid: false, reason: "malformed_token" };
   }
 
-  // Check expiration
+  // Check expiration — a token without a numeric exp never expires: reject it.
   const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === "number" && payload.exp < now) {
+  if (typeof payload.exp !== "number" || payload.exp < now) {
     return { valid: false, reason: "expired" };
   }
 

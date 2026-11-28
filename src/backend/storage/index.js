@@ -90,9 +90,32 @@ export async function lookupFiles(env, ids) {
   return { files: results || [] };
 }
 
+export async function listFiles(env, { search, limit } = {}) {
+  if (!env.storage) return { files: [] };
+  const db = env.storage;
+  await ensureStorageTables(db);
+  const q = String(search || "").trim().slice(0, 120);
+  const lim = Math.min(Math.max(Number(limit) || 100, 1), 300);
+  const like = `%${q.replace(/[%_]/g, (c) => `\\${c}`)}%`;
+  const { results } = q
+    ? await db.prepare(
+        `SELECT id, path, name, size, last_modified, created FROM files
+         WHERE name LIKE ? ESCAPE '\\' OR path LIKE ? ESCAPE '\\'
+         ORDER BY name COLLATE NOCASE LIMIT ?`
+      ).bind(like, like, lim).all()
+    : await db.prepare(
+        `SELECT id, path, name, size, last_modified, created FROM files
+         ORDER BY name COLLATE NOCASE LIMIT ?`
+      ).bind(lim).all();
+  return { files: results || [] };
+}
+
 export async function StorageFunction(env, path, method, body) {
   if (method === "POST" && path === "files/lookup") {
     return await lookupFiles(env, body?.ids);
+  }
+  if (method === "POST" && path === "files/list") {
+    return await listFiles(env, body || {});
   }
   throw new Error("Invalid storage path");
 }

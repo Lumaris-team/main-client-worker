@@ -8,7 +8,7 @@ async function setValue (functionKey, functionValue, ttl = 84600) {
   });
   return await caches.default.put(req, res);
 }
-export async function setCacheValue(key, value) {
+export async function setCacheValue(key, value, ttl) {
   if (key === "cache_keys") {
     return "Error, this key is forbidden"
   }
@@ -21,6 +21,6 @@ export async function setCacheValue(key, value) {
     cache_keys.push(key);
     await setValue("cache_keys", cache_keys);
   }
-  // Set the value
-  return await setValue(key, value);
+  // Set the value — callers may pass a custom TTL (seconds)
+  return await setValue(key, value, ttl);
 }

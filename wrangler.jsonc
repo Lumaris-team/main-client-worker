@@ -37,12 +37,12 @@
     }
   ],
   "d1_databases": [
-    { "binding": "timetable", "database_name": "timetable", "database_id": "__D1_ID_TIMETABLE__" },
-    { "binding": "subjects_data", "database_name": "subjects_data", "database_id": "__D1_ID_SUBJECTS_DATA__" },
-    { "binding": "school_data", "database_name": "school_data", "database_id": "__D1_ID_SCHOOL_DATA__" },
-    { "binding": "emails", "database_name": "emails", "database_id": "__D1_ID_EMAILS__" },
-    { "binding": "settings", "database_name": "settings", "database_id": "__D1_ID_SETTINGS__" },
-    { "binding": "storage", "database_name": "storage", "database_id": "__D1_ID_STORAGE__" }
+    { "binding": "timetable", "database_name": "timetable", "database_id": "e90910eb-6dd0-4e5e-a6d9-88cae3759dde" },
+    { "binding": "subjects_data", "database_name": "subjects_data", "database_id": "76bb4641-3e6b-446e-ba44-61471c028dac" },
+    { "binding": "school_data", "database_name": "school_data", "database_id": "6261427c-8962-4c0c-91e0-cb667e8f5f13" },
+    { "binding": "emails", "database_name": "emails", "database_id": "abc9ed10-0376-4c42-a361-266060d50cc2" },
+    { "binding": "settings", "database_name": "settings", "database_id": "3d41d88a-e2f3-4b30-bfec-97fc49a4004a" },
+    { "binding": "storage", "database_name": "storage", "database_id": "9cfb9eb2-8f45-4b86-8ab1-3807928e644a" }
   ],
   "workflows": [
     {
