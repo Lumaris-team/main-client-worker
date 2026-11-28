@@ -271,6 +271,104 @@ Rules:
   return { count: cards.length };
 }
 
+// ---------- spaced repetition: SM-2 scheduling per card ----------
+// Each card carries ease/interval/due/reps/lapses (like Anki). Cards without
+// schedule fields are treated as due today — the first smart session reviews
+// the whole deck, then only what is actually due comes back.
+
+const DAY_MS = 86400000;
+function todayStr(offsetDays = 0) {
+  return new Date(Date.now() + offsetDays * DAY_MS).toISOString().slice(0, 10);
+}
+
+function parseFlashcards(ch) {
+  try {
+    const p = typeof ch.flashcards === "string" ? JSON.parse(ch.flashcards) : ch.flashcards;
+    return Array.isArray(p?.cards) ? p.cards : [];
+  } catch { return []; }
+}
+
+function cardSchedule(c) {
+  return {
+    ease: Number(c.ease) > 0 ? Number(c.ease) : 2.5,
+    interval: Math.max(0, Number(c.interval) || 0),
+    due: /^\d{4}-\d{2}-\d{2}$/.test(c.due || "") ? c.due : todayStr(0),
+    reps: Math.max(0, Number(c.reps) || 0),
+    lapses: Math.max(0, Number(c.lapses) || 0),
+    last_q: Math.max(0, Number(c.last_q) || 0),
+  };
+}
+
+// SM-2 quality 1-5 (Encore=1, Dur=3, Bien=4, Facile=5) → writes schedule fields.
+function applyGrade(c, q) {
+  const s = cardSchedule(c);
+  q = Math.max(1, Math.min(5, Math.round(q)));
+  if (q < 3) {
+    s.reps = 0;
+    s.interval = 1;
+    s.lapses += 1;
+  } else {
+    s.reps += 1;
+    s.interval = s.reps === 1 ? 1 : s.reps === 2 ? 6 : Math.max(1, Math.round(s.interval * s.ease));
+    s.ease = Math.max(1.3, s.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
+  }
+  s.last_q = q;
+  s.due = todayStr(s.interval);
+  Object.assign(c, {
+    ease: +s.ease.toFixed(2), interval: s.interval, due: s.due,
+    reps: s.reps, lapses: s.lapses, last_q: q,
+  });
+}
+
+function cardStats(cards) {
+  const t = todayStr(0);
+  let due = 0, mature = 0, fresh = 0;
+  for (const c of cards) {
+    const s = cardSchedule(c);
+    if (s.due <= t) due++;
+    if (s.interval >= 21) mature++;
+    if (!s.reps && !s.lapses && !s.last_q) fresh++;
+  }
+  return { total: cards.length, due, mature, fresh };
+}
+
+async function reviewStatus(env, body) {
+  const ch = await getChapter(env, body?.lesson_id);
+  if (!ch) throw new Error("Chapter not found");
+  return cardStats(parseFlashcards(ch));
+}
+
+async function reviewLog(env, body) {
+  const ch = await getChapter(env, body?.lesson_id);
+  if (!ch) throw new Error("Chapter not found");
+  const cards = parseFlashcards(ch);
+  if (!cards.length) throw new Error("No flashcards on this chapter");
+
+  const byFront = new Map();
+  for (const c of cards) {
+    const k = String(c?.front || "").trim().toLowerCase();
+    if (k && !byFront.has(k)) byFront.set(k, c);
+  }
+
+  // grades: [{front, q}] — later entries win for duplicate fronts.
+  let updated = 0;
+  for (const g of Array.isArray(body?.grades) ? body.grades : []) {
+    const card = byFront.get(String(g?.front || "").trim().toLowerCase());
+    const q = Number(g?.q);
+    if (!card || !Number.isFinite(q)) continue;
+    applyGrade(card, q);
+    updated++;
+  }
+
+  if (updated) {
+    const prev = typeof ch.flashcards === "string" ? JSON.parse(ch.flashcards) : (ch.flashcards || {});
+    await updateChapter(env, ch.lesson_id, {
+      flashcards: JSON.stringify({ ...prev, cards, reviewed_at: new Date().toISOString() }),
+    });
+  }
+  return { ...cardStats(cards), updated };
+}
+
 const ACTIVITY_SPEC = `Each activity: {"id":"a1","component":"<one of: ${COMPONENTS.join(", ")}>","title":"...","instruction":"what the student must do","payload":{...component-specific data...},"answer":{...expected answer data...},"explanation":"why the answer is correct"}.
 Component payload shapes:
 - ShortTextInput/LongTextInput/NumberInput/MathInput/CodeInput: {"placeholder":"..."}; answer: {"text"|"number"|"expression"|"code": "..."}
@@ -850,6 +948,8 @@ export async function LearningFunction(env, subpath, method, body) {
     case "course-section": return await courseSection(env, body);
     case "course-status": return await courseStatus(env, body);
     case "flashcards": return await flashcards(env, body);
+    case "review-status": return await reviewStatus(env, body);
+    case "review-log": return await reviewLog(env, body);
     case "activities": return await activities(env, body);
     case "feedback": return await feedback(env, body);
     case "ask": return await ask(env, body);
