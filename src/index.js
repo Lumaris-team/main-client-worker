@@ -15,6 +15,7 @@ import { megaFilesProxy } from "./backend/mega_client.js";
 import { StorageFunction, registerFile, removeFileByPath, renameFileRow } from "./backend/storage/index.js";
 import { TasksFunction } from "./backend/database/tasks.js";
 import { SubjectsFunction } from "./backend/database/subjects.js";
+import { DumpFunction } from "./backend/database/dump.js";
 import { LearningFunction } from "./backend/learning/index.js";
 import { ToolsFunction } from "./backend/tools/index.js";
 import { StatsFunction } from "./backend/settings/stats.js";
@@ -201,6 +202,8 @@ export default {
           resp = await WebsitesFunction(env, url.pathname.slice("/api/websites/".length), method, body);
         } else if (url.pathname.startsWith("/api/tools/")) {
           resp = await ToolsFunction(env, url.pathname.slice("/api/tools/".length), method, body);
+        } else if (url.pathname === "/api/dump" || url.pathname === "/api/dump/") {
+          resp = await DumpFunction(env, method);
         } else if (url.pathname === "/api/settings/stats" || url.pathname === "/api/settings/stats/") {
           resp = await StatsFunction(env);
         } else if (url.pathname === "/api/settings/customization" || url.pathname === "/api/settings/customization/") {
